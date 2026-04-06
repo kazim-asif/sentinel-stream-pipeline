@@ -1,0 +1,51 @@
+version: '3.8'
+
+services:
+  postgres:
+    image: postgres:15
+    container_name: postgres_db
+    environment:
+      POSTGRES_USER: user
+      POSTGRES_PASSWORD: password
+      POSTGRES_DB: warehouse
+    ports:
+      - "5434:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+
+  kafka:
+    image: apache/kafka:3.9.2
+    container_name: kafka
+    environment:
+      # Use the service name 'kafka' for internal Docker communication
+      - KAFKA_NODE_ID=1
+      - KAFKA_PROCESS_ROLES=controller,broker
+      - KAFKA_LISTENERS=PLAINTEXT://:9092,CONTROLLER://:9093
+      - KAFKA_ADVERTISED_LISTENERS=PLAINTEXT://kafka:9092
+      - KAFKA_CONTROLLER_QUORUM_VOTERS=1@kafka:9093
+      - KAFKA_CONTROLLER_LISTENER_NAMES=CONTROLLER
+    ports:
+      - "9092:9092"
+
+  airflow:
+    build: .
+    # image: apache/airflow:3.1.8
+    container_name: airflow_runner
+    depends_on:
+      - postgres
+      - kafka
+    environment:
+      - AIRFLOW__DATABASE__SQL_ALCHEMY_CONN=postgresql+psycopg2://user:password@postgres:5432/warehouse
+      - AIRFLOW__CORE__EXECUTOR=LocalExecutor
+      - PYTHONPATH=/opt/airflow/dags
+    volumes:
+      - ./dags:/opt/airflow/dags
+      - ./scripts:/opt/airflow/dags/scripts
+      - ./plugins:/opt/airflow/plugins
+      - ./logs:/opt/airflow/logs
+    ports:
+      - "8080:8080"
+    command: standalone
+
+volumes:
+  postgres_data:
